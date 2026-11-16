@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Le thème de l'app : Material 3, la bibliothèque visuelle moderne de Google. -->
+    <style name="Theme.SpamGuard" parent="Theme.Material3.DayNight.NoActionBar" />
+</resources>

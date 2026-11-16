@@ -16,8 +16,8 @@ android {
         // Android 10 minimum : nécessaire pour le filtrage d'appels (CallScreeningService).
         minSdk = 29
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.2.0"
     }
 
     buildTypes {
@@ -47,4 +47,7 @@ dependencies {
 
     // OkHttp : le client HTTP qui appelle l'API de l'IA
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
+    // WorkManager : mise à jour hebdomadaire de la base offline en arrière-plan
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

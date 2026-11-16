@@ -15,10 +15,13 @@ import kotlinx.coroutines.launch
 /**
  * Récepteur SMS : Android le prévient à chaque SMS reçu.
  *
+ * Même stratégie en couches que pour les appels : liste blanche,
+ * liste noire, préfixes ARCEP, base des organismes, cache, puis IA.
+ *
  * Limite honnête d'Android : une app qui n'est pas l'app SMS par défaut
  * ne peut PAS supprimer un SMS ni empêcher sa notification. On peut
- * seulement le lire, le faire analyser par l'IA, et afficher une alerte
- * "SMS suspecté spam" avec l'explication. (Voir README, section Limitations.)
+ * seulement le lire, le faire analyser, et afficher une alerte.
+ * (Voir README, section Limitations.)
  */
 class SmsReceiver : BroadcastReceiver() {
 
@@ -37,19 +40,88 @@ class SmsReceiver : BroadcastReceiver() {
         val body = messages.joinToString("") { it.displayMessageBody ?: "" }
         if (body.isBlank()) return
 
-        // L'analyse IA est asynchrone : on ne bloque pas le récepteur.
+        // ---------- COUCHE 0 : instantané, sans réseau ni IA ----------
+
+        // Liste blanche : numéro autorisé, on ne fait aucun bruit.
+        if (SpamList.isAllowed(context, sender)) {
+            VerdictLog.add(context, event(context, sender, "SMS",
+                VerdictLog.Source.LISTE_BLANCHE, false, "Numéro autorisé manuellement"))
+            return
+        }
+
+        // Liste noire : numéro déjà signalé.
+        if (SpamList.isBlocked(context, sender)) {
+            VerdictLog.add(context, event(context, sender, "SMS",
+                VerdictLog.Source.LISTE_NOIRE, true, "Numéro déjà signalé"))
+            notifySpam(context, sender, body, "Numéro déjà signalé comme spam")
+            return
+        }
+
+        // Préfixe ARCEP réservé au démarchage.
+        if (config.blockDemarchage && PhoneBook.isDemarchage(sender)) {
+            val reason = "Démarchage : préfixe réservé (${PhoneBook.demarchagePrefix(sender)})"
+            VerdictLog.add(context, event(context, sender, "SMS",
+                VerdictLog.Source.ARCEP, true, reason))
+            notifySpam(context, sender, body, reason)
+            return
+        }
+
+        // L'analyse suivante est asynchrone : on ne bloque pas le récepteur.
         scope.launch {
+            // ---------- COUCHE 1 : locale ----------
+
+            // Expéditeur connu (hôpital, école, administration) ?
+            val known = runCatching { WincallsDb.lookup(context, sender) }.getOrNull()
+            if (known != null) {
+                VerdictLog.add(context, event(context, sender, "SMS",
+                    VerdictLog.Source.BASE, false, "Organisme officiel reconnu", known.name))
+                return@launch
+            }
+
+            // Déjà jugé récemment ?
+            val cached = VerdictCache.get(sender)
+            if (cached != null) {
+                VerdictLog.add(context, event(context, sender, "SMS",
+                    VerdictLog.Source.CACHE, cached,
+                    if (cached) "Spam (jugé récemment)" else "OK (jugé récemment)"))
+                if (cached) notifySpam(context, sender, body, "Numéro déjà jugé spam récemment")
+                return@launch
+            }
+
+            // ---------- COUCHE 2 : IA ----------
             val verdict = runCatching {
                 LlmClient.classify(config, sender, body)
-            }.getOrNull() ?: return@launch
+            }.getOrNull() ?: return@launch // fail-open : pas de notification en cas d'erreur
 
             VerdictCache.put(sender, verdict)
+
+            // Mémorisation : un spammeur SMS ne repayera pas d'analyse la prochaine fois.
+            if (verdict.spam && config.autoBlacklist) {
+                SpamList.block(context, sender)
+            }
+
+            VerdictLog.add(context, event(context, sender, "SMS",
+                VerdictLog.Source.IA, verdict.spam, verdict.reason))
 
             if (verdict.spam) {
                 notifySpam(context, sender, body, verdict.reason)
             }
         }
     }
+
+    /** Fabrique l'événement de journal correspondant. */
+    private fun event(
+        context: Context, number: String, kind: String,
+        source: String, spam: Boolean, reason: String, name: String = ""
+    ) = VerdictLog.Event(
+        timestamp = System.currentTimeMillis(),
+        number = number,
+        kind = kind,
+        source = source,
+        spam = spam,
+        reason = reason,
+        name = name
+    )
 
     /** Affiche la notification "SMS suspecté spam". */
     private fun notifySpam(context: Context, sender: String, body: String, reason: String) {

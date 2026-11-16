@@ -13,6 +13,8 @@
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <!-- Pour afficher la notification "SMS suspecté spam" (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Pour reconnaître les contacts : un contact n'est jamais filtré -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
 
     <application
         android:icon="@drawable/ic_launcher"
@@ -29,6 +31,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- L'écran "Journal & numéros" : historique, listes, signalement 33700 -->
+        <activity
+            android:name=".JournalActivity"
+            android:exported="false" />
 
         <!--
           Le service de filtrage d'appels : Android lui demande "dois-je laisser

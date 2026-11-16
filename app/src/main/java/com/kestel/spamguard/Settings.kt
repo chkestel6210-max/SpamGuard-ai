@@ -20,7 +20,11 @@ object Settings {
         val baseUrl: String,
         val model: String,
         val callsEnabled: Boolean,
-        val smsEnabled: Boolean
+        val smsEnabled: Boolean,
+        // Nouveautés v0.2 :
+        val blockDemarchage: Boolean,   // rejeter les préfixes ARCEP du démarchage
+        val autoBlacklist: Boolean,     // mémoriser à vie les numéros jugés spam par l'IA
+        val weeklyDbUpdate: Boolean     // mise à jour auto hebdo de la base des organismes
     )
 
     fun read(context: Context): Config {
@@ -30,7 +34,10 @@ object Settings {
             baseUrl = p.getString("base_url", DEFAULT_BASE_URL) ?: DEFAULT_BASE_URL,
             model = p.getString("model", DEFAULT_MODEL) ?: DEFAULT_MODEL,
             callsEnabled = p.getBoolean("calls_enabled", true),
-            smsEnabled = p.getBoolean("sms_enabled", true)
+            smsEnabled = p.getBoolean("sms_enabled", true),
+            blockDemarchage = p.getBoolean("block_demarchage", true),
+            autoBlacklist = p.getBoolean("auto_blacklist", true),
+            weeklyDbUpdate = p.getBoolean("weekly_db_update", false)
         )
     }
 
@@ -42,6 +49,9 @@ object Settings {
             .putString("model", config.model.trim())
             .putBoolean("calls_enabled", config.callsEnabled)
             .putBoolean("sms_enabled", config.smsEnabled)
+            .putBoolean("block_demarchage", config.blockDemarchage)
+            .putBoolean("auto_blacklist", config.autoBlacklist)
+            .putBoolean("weekly_db_update", config.weeklyDbUpdate)
             .apply()
     }
 }

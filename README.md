@@ -21,12 +21,27 @@ flowchart LR
 
 ## ✨ Fonctionnalités
 
-- **Filtrage d'appels** : un appel jugé spam est rejeté avant même de faire sonner le téléphone.
-- **Analyse de SMS** : chaque SMS reçu est analysé ; s'il est suspect, une notification
-  "SMS suspecté spam" s'affiche avec le texte et l'explication de l'IA.
-- **N'importe quelle API LLM** compatible avec le format OpenAI `chat/completions`
-  (par défaut : [Mistral AI](https://console.mistral.ai)).
-- **Cache de verdicts 24 h** : un numéro déjà jugé n'est pas re-soumis à l'IA.
+**Filtrage d'appels en 3 couches** (du plus rapide au plus lent, l'IA n'est consultée qu'en dernier recours) :
+
+1. **Couche 0, instantanée** : liste blanche et liste noire de l'utilisateur,
+   et **préfixes ARCEP réservés au démarchage** (0162, 0163, 0270, 0271, 0377, 0378,
+   0424, 0425, 0568, 0569, 0948, 0949 — décision ARCEP n° 2022-1583 : un démarcheur
+   est obligé d'appeler depuis ces préfixes). Rejet ou autorisation en ~0 ms, sans réseau.
+2. **Couche 1, offline** : base de **756 879 organismes français légitimes**
+   (hôpitaux, écoles, mairies, gendarmeries — source [WinCalls](https://wincalls.fr/opendata.html),
+   licence ODbL) : reconnus et laissés tranquilles sans consulter l'IA ;
+   tes **contacts** ne sont jamais filtrés non plus.
+3. **Couche 2, IA** : tout le reste, via n'importe quelle API compatible
+   OpenAI `chat/completions` (par défaut [Mistral AI](https://console.mistral.ai)).
+
+**Mémorisation à vie** : quand l'IA juge un numéro spam, il rejoint automatiquement
+la liste noire permanente. La première fois, il attend l'IA ; jamais plus ensuite.
+
+- **Analyse de SMS** : même pipeline en couches ; notification avec l'explication.
+- **Journal & numéros** : historique de chaque analyse (verdict, raison, couche
+  décisionnaire), gestion des listes, et bouton **Signaler au 33700**
+  (plateforme officielle française de signalement des spams téléphoniques).
+- **Cache de verdicts 24 h** + **mise à jour hebdo de la base offline** (WorkManager, Wi-Fi uniquement).
 - **Fail-open** : en cas d'erreur réseau ou d'IA trop lente, l'appel est laissé passer.
 - **Zéro tracking** : la clé API reste sur l'appareil, aucune donnée collectée.
 
@@ -66,10 +81,11 @@ Le dépôt compile l'APK automatiquement à chaque push, via GitHub Actions :
 
 ## 🧭 Idées pour la suite (contributions bienvenues !)
 
-- [ ] Historique des verdicts (numéro, verdict, raison)
+- [x] ~~Historique des verdicts (numéro, verdict, raison)~~ ✅ v0.2 (écran Journal)
+- [x] ~~Whitelist/blacklist manuelle en plus de l'IA~~ ✅ v0.2
+- [x] ~~Filtre on-device (hors-ligne) en secours de l'API~~ ✅ v0.2 (ARCEP + base organismes)
 - [ ] Bouton "signaler / corriger le verdict" pour affiner le prompt
-- [ ] Whitelist/blacklist manuelle en plus de l'IA
-- [ ] Filtre on-device (hors-ligne) en secours de l'API
+- [ ] Import de listes de numéros spam communautaires
 - [ ] Réponse vocale IA aux appels inconnus (via serveur SIP/VoIP)
 - [ ] Interface bilingue FR/EN
 
@@ -77,12 +93,25 @@ Le dépôt compile l'APK automatiquement à chaque push, via GitHub Actions :
 
 | Fichier | Rôle |
 |---|---|
-| `MainActivity.kt` | Écran de configuration + zone de test |
-| `SpamCallScreeningService.kt` | Demandé par Android à chaque appel : bloquer ou laisser ? |
-| `SmsReceiver.kt` | Prévenu à chaque SMS : analyse + notification |
+| `MainActivity.kt` | Écran de configuration, base offline, zone de test |
+| `JournalActivity.kt` | Journal des analyses, listes noire/blanche, signalement 33700 |
+| `SpamCallScreeningService.kt` | Le pipeline en 3 couches, appelé par Android à chaque appel |
+| `SmsReceiver.kt` | Prévenu à chaque SMS : même pipeline, analyse + notification |
+| `PhoneBook.kt` | Normalisation des numéros + détection des préfixes ARCEP du démarchage |
+| `SpamList.kt` | Listes noire et blanche persistantes |
+| `WincallsDb.kt` | Téléchargement et consultation de la base offline des organismes |
+| `DbUpdateWorker.kt` | Mise à jour hebdomadaire de la base (WorkManager) |
 | `LlmClient.kt` | Construit la requête, appelle l'API, parse le verdict JSON |
 | `VerdictCache.kt` | Cache mémoire des verdicts (24 h) |
+| `VerdictLog.kt` | Journal des événements (100 derniers) |
 | `Settings.kt` | Sauvegarde des préférences (clé API, modèle, toggles) |
+
+## 📚 Sources et licences
+
+- Base des organismes : [WinCalls Open Data](https://wincalls.fr/opendata.html), licence
+  [ODbL 1.0](https://opendatacommons.org/licenses/odbl/1-0/) (attribution requise, incluse dans l'app).
+- Préfixes du démarchage : décision ARCEP n° 2022-1583.
+- Signalement officiel : [33700](https://www.33700.fr).
 
 ## 📄 Licence
 

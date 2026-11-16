@@ -73,6 +73,19 @@
             android:layout_height="wrap_content"
             android:text="Analyser les SMS entrants" />
 
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/swDemarchage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Bloquer le démarchage (préfixes ARCEP : 0162, 0270…)" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/swAutoBlacklist"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Mémoriser à vie les numéros jugés spam par l'IA" />
+
         <Button
             android:id="@+id/btnPermissions"
             android:layout_width="match_parent"
@@ -86,12 +99,50 @@
             android:layout_height="wrap_content"
             android:text="Activer le filtrage d'appels" />
 
+        <Button
+            android:id="@+id/btnJournal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Journal &amp; numéros (bloquer, signaler au 33700)" />
+
         <TextView
             android:id="@+id/tvStatus"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="État : …" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="Base offline des organismes (756 879 numéros)"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Hôpitaux, écoles, mairies… reconnus hors ligne et jamais bloqués. Source WinCalls, licence ODbL." />
+
+        <Button
+            android:id="@+id/btnDownloadDb"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Télécharger / mettre à jour la base (~34 Mo)" />
+
+        <com.google.android.material.switchmaterial.SwitchMaterial
+            android:id="@+id/swWeeklyDb"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Mise à jour automatique hebdomadaire" />
+
+        <TextView
+            android:id="@+id/tvDbStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Base : pas encore téléchargée" />
 
         <TextView
             android:layout_width="match_parent"

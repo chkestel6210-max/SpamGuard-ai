@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  L'écran "Journal & numéros" : l'historique des analyses (qui, quand,
+  verdict, pourquoi), la liste noire et la liste blanche, avec les
+  boutons "Signaler au 33700" et "Bloquer / Retirer".
+  Le contenu est construit en Kotlin (JournalActivity) : chaque appel
+  ou SMS devient une petite "carte" dans la colonne ci-dessous.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:padding="20dp"
+        android:paddingBottom="0dp"
+        android:text="Journal &amp; numéros"
+        android:textSize="24sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:text="Historique des analyses, numéros bloqués, signalements 33700." />
+
+    <Button
+        android:id="@+id/btnClearLog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="20dp"
+        android:layout_marginEnd="20dp"
+        android:layout_marginTop="8dp"
+        android:text="Effacer le journal" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:id="@+id/llJournal"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="20dp" />
+    </ScrollView>
+</LinearLayout>

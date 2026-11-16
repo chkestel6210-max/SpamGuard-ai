@@ -1,0 +1,42 @@
+# Workflow GitHub Actions : compile automatiquement l'APK à chaque push sur main.
+# Résultat : onglet "Actions" du dépôt → run "Build APK" → artifact SpamGuard-debug-APK.
+name: Build APK
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # permet aussi de lancer la compilation à la main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest # machine Linux fournie par GitHub, Android SDK déjà installé
+
+    steps:
+      # 1. Récupérer le code du dépôt
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # 2. Installer Java 17 (requis par Android Gradle Plugin 8.x)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 3. Installer Gradle 8.7 (le dépôt ne contient pas le "wrapper", on l'installe ici)
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      # 4. Compiler l'APK de debug (télécharge les dépendances au premier run)
+      - name: Build debug APK
+        run: gradle assembleDebug --stacktrace --no-daemon
+
+      # 5. Publier l'APK en artifact téléchargeable depuis la page du run
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: SpamGuard-debug-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error

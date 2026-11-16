@@ -30,6 +30,15 @@ flowchart LR
 - **Fail-open** : en cas d'erreur réseau ou d'IA trop lente, l'appel est laissé passer.
 - **Zéro tracking** : la clé API reste sur l'appareil, aucune donnée collectée.
 
+## 📱 Installation directe (sans Android Studio)
+
+Le dépôt compile l'APK automatiquement à chaque push, via GitHub Actions :
+
+1. Onglet **Actions** du dépôt → dernier run **Build APK** → tout en bas, section **Artifacts**
+2. Télécharge **SpamGuard-debug-APK** (un zip) et dézippe-le : l'APK est dedans
+3. Sur le téléphone : autorise l'installation depuis des sources inconnues, puis installe l'APK
+4. Ouvre SpamGuard, colle ta clé API, active le filtrage
+
 ## 🚀 Installation (développeur)
 
 1. Installe [Android Studio](https://developer.android.com/studio).

@@ -127,11 +127,11 @@ class MainActivity : AppCompatActivity() {
     private fun requestCallScreeningRole() {
         if (Build.VERSION.SDK_INT >= 29) {
             val roleManager = getSystemService(RoleManager::class.java) ?: return
-            if (!roleManager.isRoleAvailable(RoleManager.ROLE_SCREENING)) {
+            if (!roleManager.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING)) {
                 Toast.makeText(this, "Ce rôle n'existe pas sur cet appareil", Toast.LENGTH_LONG).show()
                 return
             }
-            if (roleManager.isRoleHeld(RoleManager.ROLE_SCREENING)) {
+            if (roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
                 Toast.makeText(this, "Le filtrage d'appels est déjà actif", Toast.LENGTH_SHORT).show()
                 refreshStatus()
                 return
@@ -139,7 +139,7 @@ class MainActivity : AppCompatActivity() {
             // Android affiche sa propre boîte de dialogue de confirmation.
             @Suppress("DEPRECATION")
             startActivityForResult(
-                roleManager.createRequestRoleIntent(RoleManager.ROLE_SCREENING),
+                roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING),
                 REQUEST_ROLE
             )
         }
@@ -162,7 +162,7 @@ class MainActivity : AppCompatActivity() {
     /** Affiche l'état actuel : rôle accordé ? clé API remplie ? */
     private fun refreshStatus() {
         val roleHeld = if (Build.VERSION.SDK_INT >= 29) {
-            getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_SCREENING) == true
+            getSystemService(RoleManager::class.java)?.isRoleHeld(RoleManager.ROLE_CALL_SCREENING) == true
         } else false
 
         val apiKeyOk = etApiKey.text.toString().isNotBlank()

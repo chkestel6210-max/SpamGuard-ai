@@ -41,7 +41,9 @@ la liste noire permanente. La première fois, il attend l'IA ; jamais plus ensui
 - **Journal & numéros** : historique de chaque analyse (verdict, raison, couche
   décisionnaire), gestion des listes, et bouton **Signaler au 33700**
   (plateforme officielle française de signalement des spams téléphoniques).
-- **Cache de verdicts 24 h** + **mise à jour hebdo de la base offline** (WorkManager, Wi-Fi uniquement).
+- **Cache de verdicts 24 h** + **base 100 % autonome** : premier téléchargement
+  automatique dès qu'un Wi-Fi est disponible, rafraîchissement hebdomadaire et
+  dès que la base a plus de 6 jours (WorkManager, Wi-Fi uniquement).
 - **Fail-open** : en cas d'erreur réseau ou d'IA trop lente, l'appel est laissé passer.
 - **Zéro tracking** : la clé API reste sur l'appareil, aucune donnée collectée.
 

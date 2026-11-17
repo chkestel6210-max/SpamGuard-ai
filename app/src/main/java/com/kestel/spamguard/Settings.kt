@@ -37,7 +37,10 @@ object Settings {
             smsEnabled = p.getBoolean("sms_enabled", true),
             blockDemarchage = p.getBoolean("block_demarchage", true),
             autoBlacklist = p.getBoolean("auto_blacklist", true),
-            weeklyDbUpdate = p.getBoolean("weekly_db_update", false)
+            // v0.2.1 : la mise à jour automatique est activée PAR DÉFAUT.
+            // Florian a demandé "que l'app se mette à jour toute seule" :
+            // c'est le nouveau comportement normal.
+            weeklyDbUpdate = p.getBoolean("weekly_db_update", true)
         )
     }
 

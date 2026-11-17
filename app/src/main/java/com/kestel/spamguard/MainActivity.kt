@@ -17,7 +17,9 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import com.google.android.material.switchmaterial.SwitchMaterial
@@ -71,6 +73,17 @@ class MainActivity : AppCompatActivity() {
         tvResult = findViewById(R.id.tvResult)
         tvDbStatus = findViewById(R.id.tvDbStatus)
 
+        // Migration v0.2.1 : active la mise à jour automatique UNE fois,
+        // même si la v0.2.0 avait enregistré "désactivé". Florian a demandé
+        // que l'app se mette à jour toute seule : c'est désormais la norme.
+        val prefs = getSharedPreferences("spamguard_settings", MODE_PRIVATE)
+        if (!prefs.contains("weekly_auto_migrated")) {
+            prefs.edit()
+                .putBoolean("weekly_db_update", true)
+                .putBoolean("weekly_auto_migrated", true)
+                .apply()
+        }
+
         // On affiche les réglages déjà enregistrés.
         val config = Settings.read(this)
         etApiKey.setText(config.apiKey)
@@ -116,6 +129,18 @@ class MainActivity : AppCompatActivity() {
         // tâche planifiée existe bien (elle survit aux redémarrages du
         // téléphone, mais autant la ré-affirmer à chaque ouverture).
         if (config.weeklyDbUpdate) syncWeeklyWorker(true)
+
+        // LA BASE S'INSTALLE TOUTE SEULE :
+        // - absente ? Téléchargement en arrière-plan dès qu'un Wi-Fi est
+        //   disponible, sans rien demander à personne.
+        // - présente mais vieille de plus de 6 jours ? Rafraîchissement
+        //   au prochain Wi-Fi (en plus du cycle hebdomadaire).
+        if (WincallsDb.isPresent(this)) {
+            val age = System.currentTimeMillis() - WincallsDb.downloadedAt(this)
+            if (age > SIX_DAYS_MS) enqueueDbWork("wincalls_refresh_now")
+        } else {
+            enqueueDbWork("wincalls_first_download")
+        }
     }
 
     /** Relit les champs de l'écran et les enregistre dans les préférences. */
@@ -230,12 +255,18 @@ class MainActivity : AppCompatActivity() {
 
     /** Affiche l'état de la base offline des organismes. */
     private fun refreshDbStatus() {
-        tvDbStatus.text = if (WincallsDb.isPresent(this)) {
-            val date = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE)
-                .format(Date(WincallsDb.downloadedAt(this)))
-            "Base : présente (${WincallsDb.sizeMb(this)} Mo, téléchargée le $date)"
-        } else {
-            "Base : pas encore téléchargée"
+        tvDbStatus.text = buildString {
+            if (WincallsDb.isPresent(this@MainActivity)) {
+                val date = SimpleDateFormat("dd/MM/yyyy", Locale.FRANCE)
+                    .format(Date(WincallsDb.downloadedAt(this@MainActivity)))
+                append("Base : présente (${WincallsDb.sizeMb(this@MainActivity)} Mo, téléchargée le $date)\n")
+            } else {
+                append("Base : absente — elle se téléchargera toute seule au prochain Wi-Fi\n")
+            }
+            append(
+                if (swWeeklyDb.isChecked) "Mise à jour auto : ACTIVE (chaque semaine, en Wi-Fi)"
+                else "Mise à jour auto : désactivée"
+            )
         }
     }
 
@@ -260,7 +291,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Active ou désactive la mise à jour hebdomadaire de la base.
+     * Programme un téléchargement PONCTUEL de la base en arrière-plan,
+     * uniquement en Wi-Fi : WorkManager choisit tout seul le bon moment.
+     * KEEP : si une tâche identique attend déjà, on n'en empile pas une autre.
+     */
+    private fun enqueueDbWork(name: String) {
+        val request = OneTimeWorkRequestBuilder<DbUpdateWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.UNMETERED)
+                    .build()
+            )
+            .build()
+        WorkManager.getInstance(this)
+            .enqueueUniqueWork(name, ExistingWorkPolicy.KEEP, request)
+    }
+
+    /** Active ou désactive la mise à jour hebdomadaire de la base.
      * WorkManager : la bibliothèque Android qui exécute des tâches en
      * arrière-plan même si l'app est fermée (et survit aux redémarrages).
      * On ne télécharge qu'en Wi-Fi : 34 Mo, on est pas des barbares.
@@ -315,5 +362,6 @@ class MainActivity : AppCompatActivity() {
 
     companion object {
         private const val REQUEST_ROLE = 42
+        private const val SIX_DAYS_MS = 6L * 24 * 60 * 60 * 1000
     }
 }

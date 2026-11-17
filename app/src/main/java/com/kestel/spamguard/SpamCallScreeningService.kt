@@ -172,11 +172,62 @@ class SpamCallScreeningService : CallScreeningService() {
      * Sans la permission READ_CONTACTS, on répond false (on ne bloque
      * jamais "par défaut" : en cas de doute, l'appel passe).
      */
+    /**
+     * Le numéro est-il dans les contacts de l'utilisateur ?
+     *
+     * Piège rencontré en vrai (17/11) : un contact enregistré au format
+     * national ("07 82 38 38 64") n'était PAS retrouvé quand l'appel
+     * arrivait au format international ("+33782383864"). La recherche
+     * officielle d'Android (PhoneLookup) est censée tolérer ces écarts,
+     * mais selon le téléphone elle échoue. On essaie donc 3 variantes :
+     *   1. le numéro brut, tel qu'il arrive de l'appelant ;
+     *   2. le format national français ("0...") si l'appel vient de +33 ;
+     *   3. une comparaison exacte sur le numéro "normalisé" qu'Android
+     *      stocke lui-même pour chaque contact (format E.164).
+     * Si une seule variante trouve le contact, c'est gagné.
+     */
     private fun isContact(number: String): Boolean {
+        // Sans la permission, impossible de lire les contacts : on rend
+        // "faux" et le numéro ira vers l'IA, qui reste là en secours.
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_CONTACTS)
             != PackageManager.PERMISSION_GRANTED
         ) return false
 
+        // Variante 1 : le numéro tel qu'il arrive, par exemple "+33782383864".
+        if (contactLookup(number)) return true
+
+        // Variante 2 : "+33612345678" est la même personne que "0612345678".
+        // On remplace l'indicatif "+33" par un "0" (format national).
+        if (number.startsWith("+33") && number.length >= 12) {
+            if (contactLookup("0" + number.substring(3))) return true
+        }
+
+        // Variante 3 : Android range chaque numéro de contact au format
+        // international normalisé (colonne NORMALIZED_NUMBER). On demande :
+        // "montre-moi les contacts dont le numéro normalisé est EXACTEMENT
+        // celui de l'appelant". C'est la comparaison la plus fiable.
+        try {
+            val cursor = contentResolver.query(
+                ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+                arrayOf(ContactsContract.CommonDataKinds.Phone._ID),
+                ContactsContract.CommonDataKinds.Phone.NORMALIZED_NUMBER + " = ?",
+                arrayOf(number), null
+            )
+            cursor?.use { if (it.moveToFirst()) return true }
+        } catch (_: Exception) {
+            // Numéro non normalisable ou base inaccessible : on s'arrête là.
+        }
+
+        return false
+    }
+
+    /**
+     * Recherche "floue" via PhoneLookup : c'est l'outil officiel d'Android
+     * pour retrouver un numéro dans les contacts. Il ignore les espaces et
+     * les tirets, mais peut rater les différences international/national.
+     * Renvoie vrai si au moins un contact a ce numéro.
+     */
+    private fun contactLookup(number: String): Boolean {
         return try {
             val uri = ContactsContract.PhoneLookup.CONTENT_FILTER_URI
                 .buildUpon().appendPath(Uri.encode(number)).build()

@@ -2,6 +2,7 @@ package com.kestel.spamguard
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -135,11 +136,43 @@ class SmsReceiver : BroadcastReceiver() {
         ).apply { description = "Alertes quand un SMS est suspecté d'être du spam" }
         manager.createNotificationChannel(channel)
 
+        // NOUVEAUTÉ v0.2.5 : des boutons d'action DIRECTEMENT sur la
+        // notification. Plus besoin d'ouvrir l'app pour trancher :
+        //   - "BLOQUER" : l'expéditeur rejoint la liste noire ;
+        //   - "PAS DU SPAM" : l'expéditeur rejoint la liste blanche
+        //     (si l'IA s'est trompée, elle ne le reverra plus).
+        // Les deux boutons frappent NotificationActionReceiver, le même
+        // récepteur que les notifications d'appels rejetés.
+        val blockIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_BLOCK
+            putExtra("number", sender)
+        }
+        val blockPending = PendingIntent.getBroadcast(
+            context, sender.hashCode() + 1, blockIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+        val allowIntent = Intent(context, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_ALLOW
+            putExtra("number", sender)
+        }
+        val allowPending = PendingIntent.getBroadcast(
+            context, sender.hashCode() + 2, allowIntent, PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Toucher la notification ouvre le journal (pour signaler au 33700...).
+        val openJournal = PendingIntent.getActivity(
+            context, 0,
+            Intent(context, JournalActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(R.drawable.ic_launcher)
             .setContentTitle("SMS suspecté spam : $sender")
             .setContentText(reason)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setContentIntent(openJournal)
+            .addAction(0, "BLOQUER", blockPending)
+            .addAction(0, "PAS DU SPAM", allowPending)
             .setAutoCancel(true)
             .build()
 

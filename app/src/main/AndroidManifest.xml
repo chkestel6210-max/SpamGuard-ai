@@ -66,14 +66,16 @@
 
         <!--
           Le récepteur des boutons de notification : quand on appuie sur
-          "TOUJOURS AUTORISER" dans une notification "appel rejeté",
-          c'est lui qui exécute l'action, sans ouvrir l'application.
+          "TOUJOURS AUTORISER" ou "BLOQUER" dans une notification
+          (appel rejeté, SMS suspecté, appel insistant), c'est lui qui
+          exécute l'action, sans ouvrir l'application.
         -->
         <receiver
             android:name=".NotificationActionReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="com.kestel.spamguard.TOUJOURS_AUTORISER" />
+                <action android:name="com.kestel.spamguard.BLOQUER" />
             </intent-filter>
         </receiver>
 

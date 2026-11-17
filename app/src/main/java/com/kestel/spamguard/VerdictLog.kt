@@ -39,6 +39,7 @@ object VerdictLog {
         const val CONTACTS = "Contact"
         const val CACHE = "Cache 24h"
         const val IA = "IA"
+        const val INSISTANT = "Insistant (sécurité)"
         const val DESACTIVE = "Filtrage off"
     }
 

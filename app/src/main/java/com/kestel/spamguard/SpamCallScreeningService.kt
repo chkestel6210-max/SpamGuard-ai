@@ -94,6 +94,12 @@ class SpamCallScreeningService : CallScreeningService() {
             val known = runCatching { WincallsDb.lookup(this@SpamCallScreeningService, number) }
                 .getOrNull()
             if (known != null) {
+                // NOUVEAUTÉ v0.2.5 : on affiche QUI appelle PENDANT la
+                // sonnerie (hôpital, école, administration...), grâce à
+                // la base offline. Le téléphone affiche juste un numéro
+                // inconnu ; SpamGuard, lui, connaît le nom.
+                runCatching { notifyCallerId(number, known.name, known.category) }
+
                 decide(details, number, block = false, source = VerdictLog.Source.BASE,
                     spam = false, reason = "Organisme officiel reconnu", name = known.name)
                 return@launch
@@ -154,6 +160,40 @@ class SpamCallScreeningService : CallScreeningService() {
         reason: String,
         name: String = ""
     ) {
+
+        // ---------- FILET DE SÉCURITÉ "APPEL INSISTANT" (v0.2.5) ----------
+        // Un numéro qu'on a rejeté il y a MOINS de 10 minutes et qui
+        // RAPPELLE : on le laisse passer, avec une alerte. Un spammeur
+        // attendra 10 minutes ; une école qui doit prévenir d'un
+        // problème avec ton enfant, non. C'est notre "et si c'était
+        // urgent ?" : l'IA peut se tromper, l'insistance, rarement.
+        if (block && number.isNotEmpty() && RecentRejects.isRecent(this, number)) {
+            val last = RecentRejects.lastRejectedMs(this, number)
+            val minutes = if (last > 0) ((System.currentTimeMillis() - last) / 60_000 + 1).toInt() else 1
+
+            VerdictLog.add(this, VerdictLog.Event(
+                timestamp = System.currentTimeMillis(),
+                number = number,
+                kind = "APPEL",
+                source = VerdictLog.Source.INSISTANT,
+                spam = true,
+                reason = "Rejeté il y a $minutes min mais il insiste : laissé passer (possible urgence)",
+                name = name
+            ))
+
+            // On laisse l'appel sonner, SANS le rejeter.
+            respondToCall(details, CallResponse.Builder()
+                .setDisallowCall(false)
+                .setRejectCall(false)
+                .setSkipCallLog(false)
+                .setSkipNotification(false)
+                .build())
+
+            // Et on prévient l'utilisateur de ce choix de sécurité.
+            runCatching { notifyInsistent(number, minutes) }
+            return
+        }
+
         VerdictLog.add(this, VerdictLog.Event(
             timestamp = System.currentTimeMillis(),
             number = number,
@@ -178,6 +218,7 @@ class SpamCallScreeningService : CallScreeningService() {
         // le journal. La notification porte le numéro, la raison, et
         // un bouton "TOUJOURS AUTORISER" pour corriger un faux positif.
         if (block && number.isNotEmpty() && source != VerdictLog.Source.DESACTIVE) {
+            RecentRejects.record(this, number)
             runCatching { notifyRejection(number, source, reason) }
         }
     }
@@ -198,9 +239,9 @@ class SpamCallScreeningService : CallScreeningService() {
         // (silence, vibration...) dans les paramètres du téléphone.
         val channel = NotificationChannel(
             NotificationActionReceiver.CHANNEL_ID,
-            "Appels rejetés",
+            "Alertes SpamGuard",
             NotificationManager.IMPORTANCE_DEFAULT
-        ).apply { description = "Alertes quand un appel est rejeté par SpamGuard" }
+        ).apply { description = "Appels rejetés, appels insistants, identification des appelants" }
         manager.createNotificationChannel(channel)
 
         // Appuyer sur la notification ouvre l'écran "Journal & numéros".
@@ -234,6 +275,91 @@ class SpamCallScreeningService : CallScreeningService() {
 
         // Un identifiant par numéro : deux rejets différents = deux cartes.
         manager.notify(number.hashCode(), notification)
+    }
+
+    /**
+     * NOUVEAUTÉ v0.2.5 : notification "appel insistant laissé passer".
+     * C'est notre filet de sécurité : le numéro avait été rejeté il y a
+     * moins de 10 minutes, il a rappelé, on a laissé passer. L'utilisateur
+     * DOIT le savoir : c'est lui qui décide ensuite (rappeler, bloquer...).
+     */
+    private fun notifyInsistent(number: String, minutes: Int) {
+        val manager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        val channel = NotificationChannel(
+            NotificationActionReceiver.CHANNEL_ID,
+            "Alertes SpamGuard",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply { description = "Appels rejetés, appels insistants, identification des appelants" }
+        manager.createNotificationChannel(channel)
+
+        val openJournal = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, JournalActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Bouton "BLOQUER QUAND MÊME" : si l'utilisateur reconnaît un
+        // spammeur acharné, il peut le bloquer à vie en un seul geste.
+        val blockIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_BLOCK
+            putExtra("number", number)
+        }
+        val blockPending = PendingIntent.getBroadcast(
+            this, number.hashCode() + 1, blockIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, NotificationActionReceiver.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("⚠️ Appel insistant laissé passer : $number")
+            .setContentText("Rejeté il y a $minutes min, il a rappelé : appel autorisé (possible urgence).")
+            .setStyle(NotificationCompat.BigTextStyle()
+                .bigText("Rejeté il y a $minutes min, il a rappelé : appel autorisé (possible urgence). " +
+                    "Si c'est un spammeur acharné, bloque-le ci-dessous."))
+            .setContentIntent(openJournal)
+            .addAction(0, "BLOQUER QUAND MÊME", blockPending)
+            .setAutoCancel(true)
+            .build()
+
+        manager.notify(number.hashCode() + 1, notification)
+    }
+
+    /**
+     * NOUVEAUTÉ v0.2.5 : le "caller-ID". Pendant que le téléphone sonne,
+     * si la base offline connaît le numéro (hôpital, école, gendarmerie...),
+     * on affiche son nom : le téléphone ne montre qu'un numéro inconnu,
+     * SpamGuard montre qui c'est. Effet "Truecaller" en 100% local.
+     */
+    private fun notifyCallerId(number: String, name: String, category: String) {
+        val manager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Canal dédié, pour que l'utilisateur puisse régler cette alerte
+        // indépendamment des autres dans les paramètres du téléphone.
+        val channel = NotificationChannel(
+            CHANNEL_CALLER_ID,
+            "Identification des appelants",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply { description = "Affiche le nom des organismes connus pendant la sonnerie" }
+        manager.createNotificationChannel(channel)
+
+        val openJournal = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, JournalActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, CHANNEL_CALLER_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("☎️ $name")
+            .setContentText("Appel d'un organisme connu ($category) — autorisé")
+            .setContentIntent(openJournal)
+            .setAutoCancel(true) // disparaît dès qu'on la touche
+            .build()
+
+        manager.notify(number.hashCode() + 2, notification)
     }
 
     /**
@@ -308,5 +434,10 @@ class SpamCallScreeningService : CallScreeningService() {
         } catch (_: Exception) {
             false
         }
+    }
+
+    companion object {
+        /** Canal de notification dédié au caller-ID (identification pendant la sonnerie). */
+        private const val CHANNEL_CALLER_ID = "appelant_identifie"
     }
 }

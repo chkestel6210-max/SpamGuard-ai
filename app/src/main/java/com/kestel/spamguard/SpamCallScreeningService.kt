@@ -1,11 +1,17 @@
 package com.kestel.spamguard
 
 import android.Manifest
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.ContactsContract
 import android.telecom.Call
 import android.telecom.CallScreeningService
+import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -165,6 +171,69 @@ class SpamCallScreeningService : CallScreeningService() {
             .setSkipNotification(block)
             .build()
         respondToCall(details, response)
+
+        // NOUVEAUTÉ v0.2.4 : quand on REJETE un appel, on prévient
+        // l'utilisateur par une notification. Sans ça, un rejet est
+        // totalement silencieux : on ne le découvre qu'après coup dans
+        // le journal. La notification porte le numéro, la raison, et
+        // un bouton "TOUJOURS AUTORISER" pour corriger un faux positif.
+        if (block && number.isNotEmpty() && source != VerdictLog.Source.DESACTIVE) {
+            runCatching { notifyRejection(number, source, reason) }
+        }
+    }
+
+    /**
+     * Affiche la notification "Appel rejeté : +33...".
+     *
+     * Le "runCatching" autour de l'appel protège le service : si les
+     * notifications ne sont pas autorisées ou que le téléphone refuse
+     * pour une raison exotique, on ne fait pas planter le filtrage.
+     */
+    private fun notifyRejection(number: String, source: String, reason: String) {
+        val manager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        // Le canal : Android exige un "canal" par type de notification
+        // depuis Android 8 ; c'est lui que l'utilisateur peut régler
+        // (silence, vibration...) dans les paramètres du téléphone.
+        val channel = NotificationChannel(
+            NotificationActionReceiver.CHANNEL_ID,
+            "Appels rejetés",
+            NotificationManager.IMPORTANCE_DEFAULT
+        ).apply { description = "Alertes quand un appel est rejeté par SpamGuard" }
+        manager.createNotificationChannel(channel)
+
+        // Appuyer sur la notification ouvre l'écran "Journal & numéros".
+        val openJournal = PendingIntent.getActivity(
+            this, 0,
+            Intent(this, JournalActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        // Le bouton "TOUJOURS AUTORISER" : il frappe NotificationActionReceiver
+        // sans ouvrir l'application. FLAG_IMMUTABLE est obligatoire depuis
+        // Android 12 (sécurité : personne d'autre ne peut modifier l'intent).
+        val allowIntent = Intent(this, NotificationActionReceiver::class.java).apply {
+            action = NotificationActionReceiver.ACTION_ALLOW
+            putExtra("number", number)
+        }
+        val allowPending = PendingIntent.getBroadcast(
+            this, number.hashCode(), allowIntent,
+            PendingIntent.FLAG_IMMUTABLE
+        )
+
+        val notification = NotificationCompat.Builder(this, NotificationActionReceiver.CHANNEL_ID)
+            .setSmallIcon(R.drawable.ic_launcher)
+            .setContentTitle("🚫 Appel rejeté : $number")
+            .setContentText("$source : $reason")
+            .setStyle(NotificationCompat.BigTextStyle().bigText("$source : $reason"))
+            .setContentIntent(openJournal)
+            .addAction(0, "TOUJOURS AUTORISER", allowPending)
+            .setAutoCancel(true) // disparaît quand on la touche
+            .build()
+
+        // Un identifiant par numéro : deux rejets différents = deux cartes.
+        manager.notify(number.hashCode(), notification)
     }
 
     /**

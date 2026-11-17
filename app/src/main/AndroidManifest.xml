@@ -64,5 +64,18 @@
             </intent-filter>
         </receiver>
 
+        <!--
+          Le récepteur des boutons de notification : quand on appuie sur
+          "TOUJOURS AUTORISER" dans une notification "appel rejeté",
+          c'est lui qui exécute l'action, sans ouvrir l'application.
+        -->
+        <receiver
+            android:name=".NotificationActionReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.kestel.spamguard.TOUJOURS_AUTORISER" />
+            </intent-filter>
+        </receiver>
+
     </application>
 </manifest>

@@ -18,8 +18,8 @@ android {
         // Android 10 minimum : nécessaire pour le filtrage d'appels (CallScreeningService).
         minSdk = 29
         targetSdk = 34
-        versionCode = 5
-        versionName = "0.2.3"
+        versionCode = 6
+        versionName = "0.2.4"
     }
 
     // ─── CLÉ DE SIGNATURE FIXE (leçon du 17/11) ───
